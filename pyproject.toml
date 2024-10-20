@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "11-parallel-simplex"
+version = "0.1.0"
+description = "Решение задачи линейного программирования при помощи параллельного варианта симплекс-метода"
+authors = ["aaaaaaaalesha"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+numpy = "^2.1.2"
+prettytable = "^3.11.0"
+notebook = "^7.2.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
