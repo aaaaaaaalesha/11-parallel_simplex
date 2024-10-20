@@ -1,7 +1,4 @@
-"""
-Задача ЛП и решение симплекс-методом.
-Copyright 2020 Alexey Alexandrov
-"""
+"""Задача ЛП и решение симплекс-методом."""
 import json
 import logging
 from pathlib import Path
