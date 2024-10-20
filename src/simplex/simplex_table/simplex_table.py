@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 from prettytable import PrettyTable
 
-from .exceptions import SimplexProblemException
+from src.simplex.exceptions import SimplexProblemException
 
 _logger = logging.getLogger(__name__)
 
