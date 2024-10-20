@@ -1,27 +1,27 @@
-"""Задача ЛП и решение симплекс-методом."""
 import json
 import logging
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import numpy as np
+import cupy as cp
 
-from .exceptions import SimplexProblemException
-from .simplex_table import SimplexTable
+from .simplex_table import SimplexTable, SimplexTableGPU
 from .types import Solution, TargetFunctionValue, ValueType, VariableNames, VariableValues
+from .exceptions import SimplexProblemException
 
 _logger = logging.getLogger(__name__)
 
-
 class SimplexProblem:
     """
-    Класс для решения задачи ЛП симплекс-методом.
+    Класс для решения задачи ЛП симплекс-методом с возможностью использования GPU.
     """
 
-    def __init__(self, input_path: Path):
+    def __init__(self, input_path: Path, use_gpu: bool = False):
         """
         Регистрирует входные данные из JSON-файла. Определяет условие задачи.
         :param input_path: Путь до JSON-файла с входными данными.
+        :param use_gpu: Если True, будет использована параллельная версия на GPU.
         """
         # Парсим JSON-файл с входными данными
         with input_path.open() as read_file:
@@ -43,14 +43,14 @@ class SimplexProblem:
             raise SimplexProblemException(exc_msg)
 
         # Если задача на max, то меняем знаки ЦФ и направление задачи
-        # (в конце возьмем решение со знаком минус и получим искомое).
         if self.func_direction_ == "max":
             self.obj_func_coffs_ *= -1
 
         _logger.info(str(self))
 
-        # Инициализация симплекс-таблицы.
-        self.simplex_table_ = SimplexTable(
+        # Инициализация симплекс-таблицы: либо обычная версия, либо GPU-версия
+        simplex_table_cls = SimplexTableGPU if use_gpu else SimplexTable
+        self.simplex_table_ = simplex_table_cls(
             obj_func_coffs=self.obj_func_coffs_,
             constraint_system_lhs=self.constraint_system_lhs_,
             constraint_system_rhs=self.constraint_system_rhs_,
@@ -63,6 +63,7 @@ class SimplexProblem:
         constraint_system_lhs: list,
         constraint_system_rhs: list,
         func_direction="max",
+        use_gpu: bool = False
     ) -> "SimplexProblem":
         """
         Альтернативный конструктор, использующий входные значения напрямую.
@@ -70,6 +71,7 @@ class SimplexProblem:
         :param constraint_system_lhs: Матрица ограничений А.
         :param constraint_system_rhs: Вектор-столбец ограничений b.
         :param func_direction: Направление задачи ("min" (default) или "max").
+        :param use_gpu: Если True, будет использована параллельная версия на GPU.
         :return: Экземпляр класса SimplexProblem.
         """
         with NamedTemporaryFile(mode="w") as input_file:
@@ -84,7 +86,7 @@ class SimplexProblem:
                     }
                 )
             )
-            return cls(input_path)
+            return cls(input_path, use_gpu)
 
     def __str__(self):
         """Вывод условия прямой задачи ЛП."""
@@ -101,12 +103,6 @@ class SimplexProblem:
     def __repr__(self):
         """Условие задачи для отображения в Jupyter."""
         return str(self)
-
-    @property
-    def dummy_variables(self) -> tuple[VariableNames, VariableValues]:
-        """Имена и значения фиктивных переменных."""
-        dummy_variables_names: list[str] = self.simplex_table_.top_row_[2:]
-        return dummy_variables_names, [0] * len(dummy_variables_names)
 
     def solve(self) -> Solution:
         """
@@ -127,14 +123,14 @@ class SimplexProblem:
     # Этап 1. Поиск опорного решения.
     def _reference_solution(self):
         """Поиск опорного решения."""
-        log_msg: str = f"Поиск опорного решения: \n" f"Исходная симплекс-таблица:\n" f"{self.simplex_table_}"
+        log_msg: str = f"Поиск опорного решения: \nИсходная симплекс-таблица:\n{self.simplex_table_}"
         _logger.info(log_msg)
         while not self.simplex_table_.is_find_ref_solution():
             self.simplex_table_.search_ref_solution()
 
         _logger.info("Опорное решение найдено!")
-        return self.__output_solution()
 
+    # Этап 2. Поиск оптимального решения.
     def _optimal_solution(self) -> Solution:
         """Поиск оптимального решения."""
         _logger.info("Поиск оптимального решения:")
@@ -149,30 +145,7 @@ class SimplexProblem:
 
         self.solution: Solution = self.__collect_solution()
         _logger.info("Оптимальное решение найдено!")
-        self.__output_solution()
         return self.solution
-
-    def __output_solution(self) -> None:
-        """
-        Метод выводит текущее решение.
-        Используется для вывода опорного и оптимального решений.
-        """
-        dummy_vars: tuple[VariableNames, VariableValues] = self.dummy_variables
-        # Выводим фиктивные переменные со значениями, равными нулю.
-        _logger.info("".join([*[f"{var} = " for var in dummy_vars[0]], "0, "]))
-
-        last_row_ind: int = self.simplex_table_.main_table_.shape[0] - 1
-        # Выводим оставшиеся переменные и их значения.
-        log_msg: str = ", ".join(
-            [
-                f"{self.simplex_table_.left_column_[i]} = {self.simplex_table_.main_table_[i][0]:.3f}"
-                for i in range(last_row_ind)
-            ]
-        )
-        _logger.info(log_msg)
-        # Выводим значение целевой функции.
-        log_msg = f"Целевая функция: F = {self.simplex_table_.main_table_[last_row_ind][0]:.3f}"
-        _logger.info(log_msg)
 
     def __collect_solution(self) -> Solution:
         """
