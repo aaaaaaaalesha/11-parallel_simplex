@@ -7,6 +7,7 @@ from tempfile import NamedTemporaryFile
 import numpy as np
 
 from .exceptions import SimplexProblemException
+from .gpu_simplex_table import GPUSimplexTable
 from .simplex_table import SimplexTable
 from .types import Solution, TargetFunctionValue, ValueType, VariableNames, VariableValues
 
@@ -18,7 +19,7 @@ class SimplexProblem:
     Класс для решения задачи ЛП симплекс-методом.
     """
 
-    def __init__(self, input_path: Path):
+    def __init__(self, input_path: Path, use_gpu=False):
         """
         Регистрирует входные данные из JSON-файла. Определяет условие задачи.
         :param input_path: Путь до JSON-файла с входными данными.
@@ -49,8 +50,12 @@ class SimplexProblem:
 
         _logger.info(str(self))
 
+        # Выбор класса в зависимости от того, хотим ли мы использовать GPU.
+        simplex_table_backend = GPUSimplexTable if use_gpu else SimplexTable
+        _logger.info(f"Используем {simplex_table_backend} (GPU: {use_gpu})")
+
         # Инициализация симплекс-таблицы.
-        self.simplex_table_ = SimplexTable(
+        self.simplex_table_ = simplex_table_backend(
             obj_func_coffs=self.obj_func_coffs_,
             constraint_system_lhs=self.constraint_system_lhs_,
             constraint_system_rhs=self.constraint_system_rhs_,
@@ -58,11 +63,11 @@ class SimplexProblem:
 
     @classmethod
     def from_constraints(
-        cls,
-        obj_func_coffs: list,
-        constraint_system_lhs: list,
-        constraint_system_rhs: list,
-        func_direction="max",
+            cls,
+            obj_func_coffs: list,
+            constraint_system_lhs: list,
+            constraint_system_rhs: list,
+            func_direction="max",
     ) -> "SimplexProblem":
         """
         Альтернативный конструктор, использующий входные значения напрямую.

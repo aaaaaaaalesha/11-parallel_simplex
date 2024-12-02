@@ -119,7 +119,7 @@ class SimplexTable:
         _logger.info("Разрешающий столбец: %s", self.top_row_[res_col + 1])
 
         # Пересчёт симплекс-таблицы.
-        self.recalc_table(res_row, res_col, res_element)
+        self.recalculate_table(res_row, res_col, res_element)
 
     def is_find_opt_solution(self) -> bool:
         """
@@ -158,7 +158,7 @@ class SimplexTable:
                 res_row = i
 
         if res_row is None:
-            exc_msg = "Функция не ограничена! " "Оптимального решения не существует."
+            exc_msg = "Функция не ограничена! Оптимального решения не существует."
             raise SimplexProblemException(exc_msg)
 
         # Разрешающий элемент найден.
@@ -167,45 +167,37 @@ class SimplexTable:
         _logger.info("Разрешающий столбец: %s", self.top_row_[res_col + 1])
 
         # Пересчёт симплекс-таблицы.
-        self.recalc_table(res_row, res_col, res_element)
+        self.recalculate_table(res_row, res_col, res_element)
 
-    def recalc_table(self, res_row: int, res_col: int, res_element):
+    def recalculate_table(self, res_row: int, res_col: int, res_element):
         """
-        По заданным разрешающим строке, столбцу и элементу производит перерасчёт
-        симплекс-таблицы методом жордановых исключений.
+        По заданным разрешающим строке, столбцу и элементу производит пересчёт
+        симплекс-таблицы методом Жордановых исключений.
         :param res_row: Индекс разрешающей строки.
         :param res_col: Индекс разрешающего столбца.
         :param res_element: Разрешающий элемент.
         """
-        recalced_table = np.zeros((self.main_table_.shape[0], self.main_table_.shape[1]))
-        # Пересчёт разрешающего элемента.
-        recalced_table[res_row][res_col] = 1 / res_element
+        # Пересчёт таблицы (далее оставим всё, за исключением разрешающих строки/столбца/элемента).
+        recalculated_table = self.main_table_ - (
+                self.main_table_[:, res_col][:, np.newaxis] * self.main_table_[res_row, :]
+        ) / res_element
 
         # Пересчёт разрешающей строки.
         for j in range(self.main_table_.shape[1]):
             if j != res_col:
-                recalced_table[res_row][j] = self.main_table_[res_row][j] / res_element
+                recalculated_table[res_row][j] = self.main_table_[res_row][j] / res_element
 
         # Пересчёт разрешающего столбца.
         for i in range(self.main_table_.shape[0]):
             if i != res_row:
-                recalced_table[i][res_col] = -(self.main_table_[i][res_col] / res_element)
+                recalculated_table[i][res_col] = -(self.main_table_[i][res_col] / res_element)
 
-        # Пересчёт оставшейся части таблицы.
-        for i in range(self.main_table_.shape[0]):
-            if i == res_row:
-                continue
-            for j in range(self.main_table_.shape[1]):
-                if j == res_col:
-                    continue
-                value = self.main_table_[i][j] - (
-                        (self.main_table_[i][res_col] * self.main_table_[res_row][j]) / res_element
-                )
-                recalced_table[i][j] = value
+        # Пересчёт разрешающего элемента.
+        recalculated_table[res_row][res_col] = 1 / res_element
 
-        self.main_table_ = recalced_table
+        self.main_table_ = recalculated_table
         self.swap_headers(res_row, res_col)
-        _logger.info(str(self))
+        _logger.info("%s", self)
 
     def swap_headers(self, res_row: int, res_col: int) -> None:
         """
