@@ -1,0 +1,21 @@
+{
+  "obj_func_coffs": [
+    1,
+    1
+  ],
+  "constraint_system_lhs": [
+    [
+      0,
+      8
+    ],
+    [
+      9,
+      7
+    ]
+  ],
+  "constraint_system_rhs": [
+    1,
+    1
+  ],
+  "func_direction": "max"
+}

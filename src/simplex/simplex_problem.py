@@ -7,8 +7,7 @@ from tempfile import NamedTemporaryFile
 import numpy as np
 
 from .exceptions import SimplexProblemException
-from .gpu_simplex_table import GPUSimplexTable
-from .simplex_table import SimplexTable
+from .simplex_table import BaseSimplexTable, CupySimplexTable
 from .types import Solution, TargetFunctionValue, ValueType, VariableNames, VariableValues
 
 _logger = logging.getLogger(__name__)
@@ -51,7 +50,7 @@ class SimplexProblem:
         _logger.info(str(self))
 
         # Выбор класса в зависимости от того, хотим ли мы использовать GPU.
-        simplex_table_backend = GPUSimplexTable if use_gpu else SimplexTable
+        simplex_table_backend = CupySimplexTable if use_gpu else BaseSimplexTable
         _logger.info(f"Используем {simplex_table_backend} (GPU: {use_gpu})")
 
         # Инициализация симплекс-таблицы.
