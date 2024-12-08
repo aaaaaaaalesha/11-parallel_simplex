@@ -142,12 +142,10 @@ class SimplexProblem:
             self.simplex_table_.search_ref_solution()
 
         _logger.info("Опорное решение найдено!")
-        if self._verbose:
-            self.__output_solution()
-        return self.__output_solution()
+        return self.__output_solution() if self._verbose else None
 
     def _optimal_solution(self) -> Solution:
-        """Поиск оптимального решения."""
+        """Этап 2: Поиск оптимального решения."""
         _logger.info("Поиск оптимального решения:")
         while not self.simplex_table_.is_find_opt_solution():
             self.simplex_table_.optimize_ref_solution()
