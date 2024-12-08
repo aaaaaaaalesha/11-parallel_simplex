@@ -125,7 +125,7 @@ class SimplexProblem:
         Запуск решения задачи.
         :returns: Оптимальное решение задачи ЛП: вектор значений переменных и значение целевой функции.
         """
-        if self.solution is not None:
+        if self.solution:
             var_values, target_value = self.solution
             var_values_literal: str = ", ".join(f"{var_value:.3f}" for var_value in var_values)
             _logger.warning(f"Решение задачи уже получено: ({var_values_literal}); F = {target_value:.3f}")

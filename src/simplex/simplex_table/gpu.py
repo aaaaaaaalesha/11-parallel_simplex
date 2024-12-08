@@ -132,7 +132,3 @@ class CupySimplexTable(BaseSimplexTable):
 
         # Пересчёт симплекс-таблицы.
         self.recalculate_table(res_row, res_col, res_element)
-
-
-"""
-"""
