@@ -1,4 +1,4 @@
-"""Реализация симплекс-таблицы."""
+"""Реализация симплекс-таблицы под CuPy для вычислений на GPU."""
 
 import logging
 import warnings
@@ -7,7 +7,7 @@ import cupy as cp
 import numpy as np
 
 from src.simplex.exceptions import SimplexProblemException
-from .base import BaseSimplexTable
+from src.simplex.simplex_table.base import BaseSimplexTable
 
 _logger = logging.getLogger(__name__)
 
