@@ -7,7 +7,7 @@ from tempfile import NamedTemporaryFile
 import numpy as np
 
 from .exceptions import SimplexProblemException
-from .simplex_table import SimplexTable
+from .simplex_table import BaseSimplexTable, CupySimplexTable
 from .types import Solution, TargetFunctionValue, ValueType, VariableNames, VariableValues
 
 _logger = logging.getLogger(__name__)
@@ -18,10 +18,12 @@ class SimplexProblem:
     Класс для решения задачи ЛП симплекс-методом.
     """
 
-    def __init__(self, input_path: Path):
+    def __init__(self, input_path: Path, use_gpu=False, verbose=True):
         """
         Регистрирует входные данные из JSON-файла. Определяет условие задачи.
         :param input_path: Путь до JSON-файла с входными данными.
+        :param use_gpu: Флаг, позволяющий выключить параллельное вычисление на GPU.
+        :param verbose: Флаг
         """
         # Парсим JSON-файл с входными данными
         with input_path.open() as read_file:
@@ -37,20 +39,26 @@ class SimplexProblem:
         self.func_direction_ = json_data["func_direction"]
         # Найденное решение задачи (вектор значений переменных и значение целевой функции).
         self.solution: Solution | None = None
+        # Выводить ли результаты найденного решения в консоль.
+        self._verbose = verbose
 
         if len(self.constraint_system_rhs_) != self.constraint_system_rhs_.shape[0]:
-            exc_msg = "Ошибка при вводе данных. Число строк в матрице" "и столбце ограничений не совпадает."
-            raise SimplexProblemException(exc_msg)
+            raise SimplexProblemException("Ошибка при вводе данных. "
+                                          "Число строк в матрице и столбце ограничений не совпадает.")
 
         # Если задача на max, то меняем знаки ЦФ и направление задачи
         # (в конце возьмем решение со знаком минус и получим искомое).
         if self.func_direction_ == "max":
             self.obj_func_coffs_ *= -1
 
-        _logger.info(str(self))
+        _logger.info("%s", self)
+
+        # Выбор класса в зависимости от того, хотим ли мы использовать GPU.
+        simplex_table_backend = CupySimplexTable if use_gpu else BaseSimplexTable
+        _logger.info(f"Используем %s (GPU: %s)", simplex_table_backend, use_gpu)
 
         # Инициализация симплекс-таблицы.
-        self.simplex_table_ = SimplexTable(
+        self.simplex_table_ = simplex_table_backend(
             obj_func_coffs=self.obj_func_coffs_,
             constraint_system_lhs=self.constraint_system_lhs_,
             constraint_system_rhs=self.constraint_system_rhs_,
@@ -58,11 +66,13 @@ class SimplexProblem:
 
     @classmethod
     def from_constraints(
-        cls,
-        obj_func_coffs: list,
-        constraint_system_lhs: list,
-        constraint_system_rhs: list,
-        func_direction="max",
+            cls,
+            obj_func_coffs: list,
+            constraint_system_lhs: list,
+            constraint_system_rhs: list,
+            func_direction="max",
+            use_gpu=False,
+            verbose=True,
     ) -> "SimplexProblem":
         """
         Альтернативный конструктор, использующий входные значения напрямую.
@@ -70,6 +80,8 @@ class SimplexProblem:
         :param constraint_system_lhs: Матрица ограничений А.
         :param constraint_system_rhs: Вектор-столбец ограничений b.
         :param func_direction: Направление задачи ("min" (default) или "max").
+        :param use_gpu: Флаг, позволяющий выключить параллельное вычисление на GPU.
+        :param verbose:
         :return: Экземпляр класса SimplexProblem.
         """
         with NamedTemporaryFile(mode="w") as input_file:
@@ -84,7 +96,7 @@ class SimplexProblem:
                     }
                 )
             )
-            return cls(input_path)
+            return cls(input_path, use_gpu, verbose)
 
     def __str__(self):
         """Вывод условия прямой задачи ЛП."""
@@ -106,33 +118,32 @@ class SimplexProblem:
     def dummy_variables(self) -> tuple[VariableNames, VariableValues]:
         """Имена и значения фиктивных переменных."""
         dummy_variables_names: list[str] = self.simplex_table_.top_row_[2:]
-        return dummy_variables_names, [0] * len(dummy_variables_names)
+        return dummy_variables_names, [0] * len(dummy_variables_names)  # noqa
 
     def solve(self) -> Solution:
         """
         Запуск решения задачи.
         :returns: Оптимальное решение задачи ЛП: вектор значений переменных и значение целевой функции.
         """
-        if self.solution is not None:
+        if self.solution:
             var_values, target_value = self.solution
             var_values_literal: str = ", ".join(f"{var_value:.3f}" for var_value in var_values)
-            msg = f"Решение задачи уже получено: ({var_values_literal}); F = {target_value:.3f}"
-            _logger.warning(msg)
+            _logger.warning(f"Решение задачи уже получено: ({var_values_literal}); F = {target_value:.3f}")
             return self.solution
 
         _logger.info("Процесс решения:")
         self._reference_solution()
         return self._optimal_solution()
 
-    # Этап 1. Поиск опорного решения.
     def _reference_solution(self):
-        """Поиск опорного решения."""
-        log_msg: str = f"Поиск опорного решения: \n" f"Исходная симплекс-таблица:\n" f"{self.simplex_table_}"
-        _logger.info(log_msg)
+        """Этап 1: Поиск опорного решения."""
+        _logger.info("Поиск опорного решения: \nИсходная симплекс-таблица:\n%s", self.simplex_table_)
         while not self.simplex_table_.is_find_ref_solution():
             self.simplex_table_.search_ref_solution()
 
         _logger.info("Опорное решение найдено!")
+        if self._verbose:
+            self.__output_solution()
         return self.__output_solution()
 
     def _optimal_solution(self) -> Solution:
@@ -149,13 +160,13 @@ class SimplexProblem:
 
         self.solution: Solution = self.__collect_solution()
         _logger.info("Оптимальное решение найдено!")
-        self.__output_solution()
+        if self._verbose:
+            self.__output_solution()
         return self.solution
 
     def __output_solution(self) -> None:
         """
-        Метод выводит текущее решение.
-        Используется для вывода опорного и оптимального решений.
+        Метод выводит текущее решение. Используется для вывода опорного и оптимального решений.
         """
         dummy_vars: tuple[VariableNames, VariableValues] = self.dummy_variables
         # Выводим фиктивные переменные со значениями, равными нулю.
@@ -163,16 +174,14 @@ class SimplexProblem:
 
         last_row_ind: int = self.simplex_table_.main_table_.shape[0] - 1
         # Выводим оставшиеся переменные и их значения.
-        log_msg: str = ", ".join(
+        _logger.info(", ".join(
             [
                 f"{self.simplex_table_.left_column_[i]} = {self.simplex_table_.main_table_[i][0]:.3f}"
                 for i in range(last_row_ind)
             ]
-        )
-        _logger.info(log_msg)
+        ))
         # Выводим значение целевой функции.
-        log_msg = f"Целевая функция: F = {self.simplex_table_.main_table_[last_row_ind][0]:.3f}"
-        _logger.info(log_msg)
+        _logger.info(f"Целевая функция: F = {self.simplex_table_.main_table_[last_row_ind][0]:.3f}")
 
     def __collect_solution(self) -> Solution:
         """
