@@ -4,6 +4,7 @@ import logging
 import warnings
 
 import numpy as np
+from numpy import signedinteger, float32
 from prettytable import PrettyTable
 
 from src.simplex.exceptions import SimplexProblemException
@@ -35,7 +36,7 @@ class BaseSimplexTable:
         # Заполнение левого хедера.
         self.left_column_ = [f"x{var_count + i + 1}" for i in range(constraint_count)] + ["F "]
 
-        self.main_table_ = np.zeros((constraint_count + 1, var_count + 1))
+        self.main_table_: np.array = np.zeros((constraint_count + 1, var_count + 1))
         # Заполняем столбец Si0.
         for i in range(constraint_count):
             self.main_table_[i][0] = constraint_system_rhs[i]
@@ -52,7 +53,6 @@ class BaseSimplexTable:
         table = PrettyTable(self.top_row_, float_format=".4")
         for i in range(self.main_table_.shape[0]):
             table.add_row([self.left_column_[i], *self.main_table_[i]])
-
         return str(table)
 
     def is_find_ref_solution(self) -> bool:
@@ -60,63 +60,52 @@ class BaseSimplexTable:
         Проверяет, найдено ли опорное решение по свободным в симплекс-таблице.
         :return: True - опорное решение уже найдено, иначе - пока не является опорным.
         """
-        return all(self.main_table_[i][0] >= 0 for i in range(self.main_table_.shape[0] - 1))
+        return all(self.main_table_[i][0] >= 0
+                   for i in range(self.main_table_.shape[0] - 1))
 
     def search_ref_solution(self) -> None:
-        """
-        Функция производит одну итерацию поиска опорного решения.
-        """
-        res_row = None
-        for i in range(self.main_table_.shape[0] - 1):
-            if self.main_table_[i][0] < 0:
-                res_row = i
-                break
+        """Функция производит одну итерацию поиска опорного решения."""
+        # Находим строки с отрицательными свободными членами
+        negative_rows = np.where(self.main_table_[:-1, 0] < 0)[0]
+
+        if negative_rows.size == 0:
+            raise SimplexProblemException("Задача не имеет допустимых решений!")
 
         # Если найден отрицательный элемент в столбце свободных членов,
         # то ищем первый отрицательный в строке с ней.
-        res_col = None
-        if res_row is not None:
-            for j in range(1, self.main_table_.shape[1]):
-                if self.main_table_[res_row, j] < 0:
-                    res_col = j
-                    break
+        res_row = negative_rows[0]
+        # Находим первый отрицательный элемент в строке с отрицательным свободным членом.
+        negative_columns = np.where(self.main_table_[res_row, 1:] < 0)[0]
 
-        # Если найден разрешающий столбец, то находим в нём разрешающий элемент.
-        if res_col is None:
-            exc_msg = (
+        if negative_columns.size == 0:
+            raise SimplexProblemException(
                 "Задача не имеет допустимых решений! "
                 "При нахождении опорного решения не нашлось "
                 "отрицательного элемента в строке с отрицательным свободным членом."
             )
-            raise SimplexProblemException(exc_msg)
+        # Если найден разрешающий столбец, то находим в нём разрешающий элемент.
+        # `+1`, чтобы учесть смещение из-за первого столбца
+        res_col: signedinteger = negative_columns[0] + 1
 
-        # Ищем минимальное положительное отношение Si0 / x[res_col].
-        minimum = None
-        ind = -1
-        for i in range(self.main_table_.shape[0] - 1):
-            # Ищем минимальное отношение -- разрешающую строку.
-            curr = self.main_table_[i][res_col]
-            s_i0 = self.main_table_[i][0]
-            if curr == 0:
-                continue
+        # Ищем минимальное положительное отношение Si0 / x[res_col]
+        ratios = self.main_table_[:-1, 0] / self.main_table_[:-1, res_col]
+        positive_ratios = ratios[ratios > 0]
 
-            if (s_i0 / curr) > 0 and (minimum is None or (s_i0 / curr) < minimum):
-                minimum = s_i0 / curr
-                ind = i
-
-        if minimum is None:
-            exc_msg = (
-                "Решения не существует! "
-                "При нахождении опорного решения не нашлось минимального "
+        if positive_ratios.size == 0:
+            raise SimplexProblemException(
+                "Решения не существует! При нахождении опорного решения не нашлось минимального "
                 "положительного отношения."
             )
-            raise SimplexProblemException(exc_msg)
 
-        res_row = ind
+        # Находим индекс разрешающей строки среди строк с отрицательными свободными членами
+        ind = np.argmin(positive_ratios)
+        # Получаем индекс разрешающей строки.
+        res_row: signedinteger = negative_rows[ind]
+
         # Разрешающий элемент найден.
-        res_element = self.main_table_[res_row][res_col]
+        res_element = self.main_table_[res_row, res_col]
         _logger.info("Разрешающая строка: %s", self.left_column_[res_row])
-        _logger.info("Разрешающий столбец: %s", self.top_row_[res_col + 1])
+        _logger.info("Разрешающий столбец: %s", self.top_row_[res_col])
 
         # Пересчёт симплекс-таблицы.
         self.recalculate_table(res_row, res_col, res_element)
@@ -127,49 +116,52 @@ class BaseSimplexTable:
         :return: True - оптимальное решение уже найдено, иначе - пока не оптимально.
         """
         # Если положительных не нашлось, то оптимальное решение уже найдено.
-        return all(self.main_table_[self.main_table_.shape[0] - 1][i] <= 0 for i in range(1, self.main_table_.shape[1]))
+        return all(self.main_table_[self.main_table_.shape[0] - 1][i] <= 0
+                   for i in range(1, self.main_table_.shape[1]))
 
     def optimize_ref_solution(self) -> None:
         """
         Производит одну итерацию поиска оптимального решения на основе
         уже полученного опорного решения.
         """
-        res_col = None
-        ind_f = self.main_table_.shape[0] - 1
+        ind_f: int = self.main_table_.shape[0] - 1
+        # Находим первый положительный элемент в строке F.
+        positive_columns = np.where(self.main_table_[ind_f, 1:] > 0)[0]
 
-        # В строке F ищем первый положительный.
-        for j in range(1, self.main_table_.shape[1]):
-            curr = self.main_table_[ind_f][j]
-            if curr > 0:
-                res_col = j
-                break
+        if positive_columns.size == 0:
+            raise SimplexProblemException("Функция не ограничена! Оптимального решения не существует.")
 
-        minimum, res_row = None, None
-        # Идём по всем, кроме ЦФ ищём минимальное отношение.
-        for i in range(self.main_table_.shape[0] - 1):
-            # Ищем минимальное отношение - разрешающую строку.
-            curr = self.main_table_[i][res_col]
-            s_i0 = self.main_table_[i][0]
-            if curr < 0:
-                continue
+        # `+1`, чтобы учесть смещение из-за первого столбца.
+        res_col = positive_columns[0] + 1
 
-            if (s_i0 / curr) >= 0 and (minimum is None or (s_i0 / curr) < minimum):
-                minimum = s_i0 / curr
-                res_row = i
+        # Ищем минимальное отношение `Si0 / x[res_col]` (Идём по всем, кроме ЦФ ищём минимальное отношение).
+        s_i0 = self.main_table_[:-1, 0]
+        curr = self.main_table_[:-1, res_col]
+        # Находим положительные элементы в текущем столбце.
+        valid_rows = curr >= 0
+        # Заменяем недопустимые отношения на бесконечность.
+        ratios = np.where(valid_rows, s_i0 / curr, np.inf)
 
-        if res_row is None:
-            exc_msg = "Функция не ограничена! Оптимального решения не существует."
-            raise SimplexProblemException(exc_msg)
+        # Находим минимальное положительное отношение.
+        if np.all(np.isinf(ratios)):
+            raise SimplexProblemException("Функция не ограничена! Оптимального решения не существует.")
+
+        # Находим индекс разрешающей строки.
+        res_row = np.argmin(ratios)
+
+        # Проверяем, что `res_row` соответствует индексу в исходной таблице.
+        if not valid_rows[res_row]:
+            raise SimplexProblemException("Функция не ограничена! Оптимального решения не существует.")
 
         # Разрешающий элемент найден.
-        res_element = self.main_table_[res_row][res_col]
+        res_element = self.main_table_[res_row, res_col]
         _logger.info("Разрешающая строка: %s", self.left_column_[res_row])
-        _logger.info("Разрешающий столбец: %s", self.top_row_[res_col + 1])
+        _logger.info("Разрешающий столбец: %s", self.top_row_[res_col])
 
         # Пересчёт симплекс-таблицы.
         self.recalculate_table(res_row, res_col, res_element)
 
-    def recalculate_table(self, res_row: int, res_col: int, res_element):
+    def recalculate_table(self, res_row: signedinteger, res_col: signedinteger, res_element: float32):
         """
         По заданным разрешающим строке, столбцу и элементу производит пересчёт
         симплекс-таблицы методом Жордановых исключений.
@@ -205,7 +197,4 @@ class BaseSimplexTable:
         :param res_row: Индекс разрешающей строки.
         :param res_col: Индекс разрешающего столбца.
         """
-        self.top_row_[res_col + 1], self.left_column_[res_row] = (
-            self.left_column_[res_row],
-            self.top_row_[res_col + 1],
-        )
+        self.top_row_[res_col + 1], self.left_column_[res_row] = self.left_column_[res_row], self.top_row_[res_col + 1]
