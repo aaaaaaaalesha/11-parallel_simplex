@@ -133,9 +133,6 @@ class SimplexProblem:
         Запуск решения задачи.
         :returns: Оптимальное решение задачи ЛП: вектор значений переменных и значение целевой функции.
         """
-        if isinstance(self.simplex_table_, NumbaSimplexTable):
-            # init cuda device
-            cuda.select_device(0)
 
         if self.solution:
             var_values, target_value = self.solution

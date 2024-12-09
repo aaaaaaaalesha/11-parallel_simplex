@@ -10,21 +10,19 @@ from src.simplex.simplex_problem import SimplexProblem
 def benchmark_lp_solver(problem_size_iterable: Iterable[int]) -> PrettyTable:
     # Создание таблицы для результатов
     report_table = PrettyTable(("Размерность задачи (число переменных / ограничений)",
-                                "CPU Time (ms)", "CuPy GPU Time (ms)", "Numba GPU Time (ms)"))
+                                "CPU Time (ms)", "GPU Time (ms)"))# "Numba GPU Time (ms)"))
     for problem_size in problem_size_iterable:
         # Генерация входных данных
         lp_input = _generate_lp_input(problem_size, problem_size)
         # Решение задачи без GPU.
-        problem_cpu = SimplexProblem.from_constraints(**lp_input,
-                                                      verbose=False)
+        problem_cpu = SimplexProblem.from_constraints(**lp_input, verbose=False)
         start_time = time.time()
         sol_cpu = problem_cpu.solve()
         end_time = time.time()
         cpu_time = (end_time - start_time) * 1_000  # ms
 
         # Решение задачи с GPU (CuPy).
-        problem_gpu = SimplexProblem.from_constraints(**lp_input,
-                                                      use_gpu="cupy", verbose=False)
+        problem_gpu = SimplexProblem.from_constraints(**lp_input, use_gpu="cupy", verbose=False)
         start_time = time.time()
         sol_cupy = problem_gpu.solve()
         end_time = time.time()
@@ -41,7 +39,7 @@ def benchmark_lp_solver(problem_size_iterable: Iterable[int]) -> PrettyTable:
         assert sol_cpu[1] == sol_cupy[1]
         # Добавление результатов в таблицу.
         report_table.add_row([problem_size, f"{cpu_time:.3f}",
-                              f"{cupy_time:.3f}", f"{0:.3f}"])
+                              f"{cupy_time:.3f}",]) #  f"{0:.3f}"])
 
     return report_table
 
