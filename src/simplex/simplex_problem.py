@@ -1,16 +1,16 @@
 """Задача ЛП и решение симплекс-методом."""
 import json
 import logging
+import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import numpy as np
-from numba import cuda
 
 from .exceptions import SimplexProblemException
 from .simplex_table import BaseSimplexTable, CupySimplexTable
 from .simplex_table.gpu import BackendGPU, NumbaSimplexTable
-from .types import Solution, TargetFunctionValue, ValueType, VariableNames, VariableValues
+from .types import Solution, Extremum, ValueType, VariableValues, TargetFunctionValue
 
 _logger = logging.getLogger(__name__)
 
@@ -78,8 +78,8 @@ class SimplexProblem:
             obj_func_coffs: list,
             constraint_system_lhs: list,
             constraint_system_rhs: list,
-            func_direction="max",
-            use_gpu=False,
+            func_direction: Extremum = "max",
+            use_gpu=None,
             verbose=True,
     ) -> "SimplexProblem":
         """
@@ -122,16 +122,11 @@ class SimplexProblem:
         """Условие задачи для отображения в Jupyter."""
         return str(self)
 
-    @property
-    def dummy_variables(self) -> tuple[VariableNames, VariableValues]:
-        """Имена и значения фиктивных переменных."""
-        dummy_variables_names: list[str] = self.simplex_table_.top_row_[2:]
-        return dummy_variables_names, [0] * len(dummy_variables_names)  # noqa
-
-    def solve(self) -> Solution:
+    def solve(self, timer=None) -> tuple[Solution, float | None]:
         """
         Запуск решения задачи.
         :returns: Оптимальное решение задачи ЛП: вектор значений переменных и значение целевой функции.
+                  Также, если передан параметр timer, производится замер быстродействия вычислений и возврат значения.
         """
 
         if self.solution:
@@ -141,56 +136,17 @@ class SimplexProblem:
             return self.solution
 
         _logger.info("Процесс решения:")
-        self._reference_solution()
-        return self._optimal_solution()
 
-    def _reference_solution(self):
-        """Этап 1: Поиск опорного решения."""
-        _logger.info("Поиск опорного решения: \nИсходная симплекс-таблица:\n%s", self.simplex_table_)
-        while not self.simplex_table_.is_find_ref_solution():
-            self.simplex_table_.search_ref_solution()
+        timer = time.time() if timer else None
+        self.simplex_table_.find_optimal_solution(self.func_direction_, verbose=self._verbose)
+        timer = time.time() - timer if timer else None
 
-        _logger.info("Опорное решение найдено!")
-        return self.__output_solution() if self._verbose else None
-
-    def _optimal_solution(self) -> Solution:
-        """Этап 2: Поиск оптимального решения."""
-        _logger.info("Поиск оптимального решения:")
-        while not self.simplex_table_.is_find_opt_solution():
-            self.simplex_table_.optimize_ref_solution()
-
-        # Если задача на max, то в начале свели задачу к поиску min, а теперь
-        # возьмём это решение со знаком минус и получим ответ для max.
-        if self.func_direction_ == "max":
-            table_rows_count: int = self.simplex_table_.main_table_.shape[0]
-            self.simplex_table_.main_table_[table_rows_count - 1][0] *= -1
-
-        self.solution: Solution = self.__collect_solution()
-        _logger.info("Оптимальное решение найдено!")
+        solution: Solution = self._collect_solution()
         if self._verbose:
-            self.__output_solution()
-        return self.solution
+            self.simplex_table_.output_solution()
+        return solution, timer
 
-    def __output_solution(self) -> None:
-        """
-        Метод выводит текущее решение. Используется для вывода опорного и оптимального решений.
-        """
-        dummy_vars: tuple[VariableNames, VariableValues] = self.dummy_variables
-        # Выводим фиктивные переменные со значениями, равными нулю.
-        _logger.info("".join([*[f"{var} = " for var in dummy_vars[0]], "0, "]))
-
-        last_row_ind: int = self.simplex_table_.main_table_.shape[0] - 1
-        # Выводим оставшиеся переменные и их значения.
-        _logger.info(", ".join(
-            [
-                f"{self.simplex_table_.left_column_[i]} = {self.simplex_table_.main_table_[i][0]:.3f}"
-                for i in range(last_row_ind)
-            ]
-        ))
-        # Выводим значение целевой функции.
-        _logger.info(f"Целевая функция: F = {self.simplex_table_.main_table_[last_row_ind][0]:.3f}")
-
-    def __collect_solution(self) -> Solution:
+    def _collect_solution(self) -> Solution:
         """
         Формирует решение задачи ЛП симплекс-методом.
         :returns Solution: Найденные оптимальные значения переменных и целевой функции.

@@ -1,6 +1,10 @@
 """Подсказки типов для симплекс-метода."""
 
-from typing import Sequence, TypeAlias
+from typing import Sequence, TypeAlias, Literal
+
+
+# Type to annotate extremum direction.
+Extremum: type[str] = Literal["max", "min"]
 
 # Type to annotate values in simplex problems.
 ValueType: TypeAlias = int | float
