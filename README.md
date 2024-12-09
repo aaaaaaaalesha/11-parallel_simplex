@@ -102,3 +102,8 @@ Cuda compilation tools, release 12.6, V12.6.85
 Build cuda_12.6.r12.6/compiler.35059454_0
 ```
 
+## Результаты
+
+![img.png](assets/images/gpu_usage.png)
+
+![img.png](assets/images/time_compare_results.png)
