@@ -5,9 +5,11 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import numpy as np
+from numba import cuda
 
 from .exceptions import SimplexProblemException
 from .simplex_table import BaseSimplexTable, CupySimplexTable
+from .simplex_table.gpu import BackendGPU, NumbaSimplexTable
 from .types import Solution, TargetFunctionValue, ValueType, VariableNames, VariableValues
 
 _logger = logging.getLogger(__name__)
@@ -18,12 +20,12 @@ class SimplexProblem:
     Класс для решения задачи ЛП симплекс-методом.
     """
 
-    def __init__(self, input_path: Path, use_gpu=False, verbose=True):
+    def __init__(self, input_path: Path, use_gpu: BackendGPU | None = None, verbose=True):
         """
         Регистрирует входные данные из JSON-файла. Определяет условие задачи.
         :param input_path: Путь до JSON-файла с входными данными.
-        :param use_gpu: Флаг, позволяющий выключить параллельное вычисление на GPU.
-        :param verbose: Флаг
+        :param use_gpu: Параметр, позволяющий включить параллельное вычисление на GPU.
+        :param verbose: Флаг вывода результатов найденного решения в логи.
         """
         # Парсим JSON-файл с входными данными
         with input_path.open() as read_file:
@@ -54,7 +56,13 @@ class SimplexProblem:
         _logger.info("%s", self)
 
         # Выбор класса в зависимости от того, хотим ли мы использовать GPU.
-        simplex_table_backend = CupySimplexTable if use_gpu else BaseSimplexTable
+        match use_gpu:
+            case "cupy":
+                simplex_table_backend = CupySimplexTable
+            case "numba":
+                simplex_table_backend = NumbaSimplexTable
+            case _:
+                simplex_table_backend = BaseSimplexTable
         _logger.info(f"Используем %s (GPU: %s)", simplex_table_backend, use_gpu)
 
         # Инициализация симплекс-таблицы.
@@ -125,6 +133,7 @@ class SimplexProblem:
         Запуск решения задачи.
         :returns: Оптимальное решение задачи ЛП: вектор значений переменных и значение целевой функции.
         """
+
         if self.solution:
             var_values, target_value = self.solution
             var_values_literal: str = ", ".join(f"{var_value:.3f}" for var_value in var_values)
