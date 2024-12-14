@@ -1,9 +1,10 @@
 {
-  "obj_func_coffs": [1, 1],
+  "obj_func_coffs": [1, 1, 2],
   "constraint_system_lhs": [
-    [0, 8],
-    [9, 7]
+    [0, 8, -6],
+    [9, 7, 2],
+    [2, -1, 8]
   ],
-  "constraint_system_rhs": [1, 1],
+  "constraint_system_rhs": [1, 2, 3],
   "func_direction": "max"
 }

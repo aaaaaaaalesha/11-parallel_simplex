@@ -23,7 +23,7 @@
 
 ## Мат. постановка задачи линейного программирования (ЗЛП)
 
-![img.png](assets/images/img.png)
+![img.png](assets/images/time_compare.png)
 
 ## Установка окружения и запуск
 
@@ -86,9 +86,19 @@ Architecture).
 |                                         |                        |               MIG M. |
 |=========================================+========================+======================|
 |   0  NVIDIA GeForce GTX 1660        Off |   00000000:08:00.0  On |                  N/A |
-|  0%   41C    P5             17W /  140W |     413MiB /   6144MiB |     29%      Default |
+|  0%   52C    P0             65W /  140W |    2775MiB /   6144MiB |    100%      Default |
 |                                         |                        |                  N/A |
 +-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A      1360      G   /usr/lib/xorg/Xorg                            176MiB |
+|    0   N/A  N/A      1624      G   /usr/bin/gnome-shell                           40MiB |
+|    0   N/A  N/A      9963      C   ...-simplex-Fa3Iw1Zs-py3.10/bin/python       2370MiB |
++-----------------------------------------------------------------------------------------+
 ```
 
 **CUDA Toolkit:**
@@ -106,4 +116,10 @@ Build cuda_12.6.r12.6/compiler.35059454_0
 
 ![img.png](assets/images/gpu_usage.png)
 
-![img.png](assets/images/time_compare_results.png)
+![img.png](assets/images/time_compare.png)
+
+Линейная шкала:
+![img.png](assets/images/results_linear_graph.png)
+
+Логарифмическая шкала:
+![img_1.png](assets/images/results_log_graph.png)
