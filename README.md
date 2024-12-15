@@ -24,7 +24,7 @@
 ## Мат. постановка задачи линейного программирования (ЗЛП)
 <p align="center">
   <a href="assets/images/linear_programming.png">
-      <img alt="Мат. постановка (сломалась)" src="assets/images/linear_programming.png">
+      <img width=550 height=526 alt="Мат. постановка (сломалась)" src="assets/images/linear_programming.png">
   </a>
 </p>
 
