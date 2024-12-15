@@ -27,6 +27,27 @@
 
 ## Установка окружения и запуск
 
+0. Установка драйверов NVidia и [CUDA Toolkit 12.4](https://developer.nvidia.cn/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_network)
+
+Инструкции по установке:
+```bash
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt-get update
+sudo apt-get -y install cuda-toolkit-12-4
+```
+
+Устаревший модуль ядра:
+```bash
+sudo apt-get install -y cuda-drivers
+```
+
+Модуль ядра flavor:
+```bash
+sudo apt-get install -y nvidia-driver-550-open
+sudo apt-get install -y cuda-drivers-550
+```
+
 1. Установка **Poetry** для управления зависимостями.
 
 ```bash
