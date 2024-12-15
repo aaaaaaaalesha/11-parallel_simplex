@@ -22,8 +22,11 @@
 </p>
 
 ## Мат. постановка задачи линейного программирования (ЗЛП)
-
-![img.png](assets/images/time_compare.png)
+<p align="center">
+  <a href="assets/images/linear_programming.png">
+      <img alt="Мат. постановка (сломалась)" src="assets/images/linear_programming.png">
+  </a>
+</p>
 
 ## Установка окружения и запуск
 
